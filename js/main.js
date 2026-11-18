@@ -54,6 +54,7 @@
   }
 
   canvas.addEventListener("pointerdown", function (e) {
+    if (FG.paused) { e.preventDefault(); return; } // rotate lock swallows all input
     A.init(); A.resume();
     var p = toLogical(e.clientX, e.clientY);
     U.mouse.x = p.x; U.mouse.y = p.y;
@@ -66,6 +67,7 @@
     e.preventDefault();
   });
   window.addEventListener("pointerup", function (e) {
+    if (FG.paused) { U.mouseIsDown = false; pointerHeld = false; return; }
     var p = toLogical(e.clientX, e.clientY);
     U.mouse.x = p.x; U.mouse.y = p.y;
     var consumed = U.click(p.x, p.y);
@@ -94,6 +96,7 @@
   var HOTKEYS = { Digit1: "shop", Digit2: "collection", Digit3: "quests", Digit4: "trophies", Digit5: "profile", Digit6: "pause" };
 
   window.addEventListener("keydown", function (e) {
+    if (FG.paused) return; // rotate lock: no keyboard either
     A.init(); A.resume();
     var k = e.code;
     if (k === "Space") {
@@ -149,12 +152,41 @@
     if (document.visibilityState === "hidden") saveNow();
   });
 
+  // ---------------- rotate lock ----------------
+  // Touch devices (phones/tablets) must be in landscape: a full-screen modal
+  // demands rotation, the sim freezes behind it, and it dismisses the instant
+  // the device turns sideways. Desktop (fine pointer) is never locked.
+  var ROT = FG.rotate = { needed: false, refresh: applyOrientation };
+  var mqPortrait = window.matchMedia("(orientation: portrait)");
+
+  function isTouchForm() {
+    return window.matchMedia("(pointer: coarse)").matches &&
+      (navigator.maxTouchPoints || 0) > 0;
+  }
+
+  function applyOrientation() {
+    var need = isTouchForm() && mqPortrait.matches;
+    if (need === ROT.needed) return;
+    ROT.needed = need;
+    FG.paused = need;
+    document.body.classList.toggle("portraitLock", need);
+    if (need) { saveNow(); A.suspend(); }
+    else { A.resume(); }
+  }
+
+  if (mqPortrait.addEventListener) mqPortrait.addEventListener("change", applyOrientation);
+  else mqPortrait.addListener(applyOrientation); // iOS < 14
+  window.addEventListener("orientationchange", applyOrientation);
+  window.addEventListener("resize", applyOrientation);
+  applyOrientation(); // device may already be portrait at boot
+
   // ---------------- main loop ----------------
   var last = performance.now();
 
   function frame(now) {
     var dt = (now - last) / 1000;
     last = now;
+    if (FG.paused) { requestAnimationFrame(frame); return; } // rotate-lock: freeze sim, hold last frame
     if (dt > 0.1) dt = 0.1; // browser tab was sleeping / hitched
     FG.tGlobal = (FG.tGlobal || 0) + dt;
 
@@ -186,6 +218,55 @@
   // boot: load (or mint) save state so title can check for it
   S.load();
   requestAnimationFrame(frame);
+
+  // ---------------- PWA: service worker + install prompt ----------------
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () { /* offline is optional */ });
+    });
+  }
+
+  var deferredBip = null;
+  var IS_IOS = /iPhone|iPad|iPod/.test(navigator.platform) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  var STANDALONE = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+
+  var INST = FG.install = {
+    available: false,          // show the harbor install chip
+    isStandalone: STANDALONE,
+    deferred: null,
+    request: function () {
+      if (deferredBip) {
+        deferredBip.prompt();
+        return deferredBip.userChoice.then(function (choice) {
+          deferredBip = null;
+          INST.available = false;
+          if (choice.outcome === "accepted") U.toast("ISLAND ANGLER INSTALLED", "#4ec26b");
+        });
+      }
+      // iOS: no prompt API - tell the user the manual path
+      U.toast("TAP SHARE, THEN 'ADD TO HOME SCREEN'", "#ffd94a", 5);
+      return Promise.resolve();
+    }
+  };
+
+  window.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault();
+    deferredBip = e;
+    INST.available = true;
+  });
+  window.addEventListener("appinstalled", function () {
+    INST.available = false;
+    deferredBip = null;
+  });
+  // iOS never fires beforeinstallprompt; offer the manual hint once on the harbor
+  if (IS_IOS && !STANDALONE) {
+    INST.available = true;
+    INST.request = function () {
+      U.toast("TAP SHARE, THEN 'ADD TO HOME SCREEN'", "#ffd94a", 5);
+      return Promise.resolve();
+    };
+  }
 
   // test/debug seam: drive the game headlessly from the console
   FG.debug = {

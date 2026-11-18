@@ -389,6 +389,7 @@
   }
 
   // ---------------- HUD ----------------
+  var installDismissed = false;
   function hudLayer(ctx) {
     // portrait chip
     ctx.fillStyle = "rgba(10,16,26,0.75)";
@@ -426,6 +427,16 @@
     var bait = S.getBait();
     var cnt = bait.id === "worm" ? "MAX" : (S.state.bait[bait.id] | 0);
     F.draw(ctx, bait.name.replace("BASIC ", "").replace(" BAIT", "").replace(" LURE", "") + " " + cnt, 29, 50, "#c2ced9", 1);
+
+    // PWA install chip: shows when Chrome signals installability (or iOS hint)
+    if (FG.install && FG.install.available && !installDismissed) {
+      var ix = FG.W - 144, iy = 42;
+      U.btn(ctx, ix, iy, 110, 16, "INSTALL", { cb: function () { FG.install.request(); } });
+      U.btn(ctx, ix + 114, iy, 14, 16, "X", { cb: function () {
+        installDismissed = true;
+        if (FG.install) FG.install.available = false;
+      } });
+    }
 
     // hint
     if (G.hint && !G.fishingActive()) {
@@ -513,7 +524,7 @@
     var res = G.result;
     ctx.fillStyle = "rgba(4,8,14,0.55)";
     ctx.fillRect(0, 0, FG.W, FG.H);
-    var w = 400, h = 190, x = FG.W / 2 - w / 2, y = 70;
+    var w = 400, h = 150, x = FG.W / 2 - w / 2, y = 98;
     U.panel(ctx, x, y, w, h, {
       title: res.lost ? "IT GOT AWAY" : (res.first ? "NEW SPECIES!" : "LAND IT!"),
       accent: res.lost ? "#e87a6e" : FG.rarityColor(res.fish.rarity)
@@ -523,46 +534,54 @@
       var sp = FG.fishSprite(f.id, Math.floor(FG.tGlobal * 4) % FG.FISH_FRAMES, true);
       if (sp) {
         ctx.globalAlpha = 0.5;
-        ctx.drawImage(sp, FG.W / 2 - sp.width / 2, y + 34);
+        ctx.drawImage(sp, FG.W / 2 - sp.width / 2, y + 26);
         ctx.globalAlpha = 1;
       }
-      F.draw(ctx, "A " + FG.rarityName(f.rarity).toLowerCase() + " SHADOW SLIPPED THE HOOK", FG.W / 2, y + 120, "#8fa8c2", 1, { align: "center" });
-      F.drawWrapped(ctx, res.reason, FG.W / 2, y + 140, "#c2ced9", 1, w - 60, 1, { align: "center" });
+      F.draw(ctx, "A " + FG.rarityName(f.rarity).toLowerCase() + " SHADOW SLIPPED THE HOOK", FG.W / 2, y + 78, "#8fa8c2", 1, { align: "center" });
+      F.drawWrapped(ctx, res.reason, FG.W / 2, y + 92, "#c2ced9", 1, w - 60, 1, { align: "center" });
     } else {
       var fr = Math.floor(FG.tGlobal * 8) % FG.FISH_FRAMES;
       var sp2 = FG.fishSprite(f.id, fr, false);
       var appear = FG.easeOut(FG.clamp(resT * 2, 0, 1));
       if (sp2) {
         ctx.save();
-        ctx.translate(FG.W / 2, y + 62);
+        ctx.translate(FG.W / 2, y + 40);
         ctx.scale((0.6 + 0.4 * appear), (0.6 + 0.4 * appear));
         ctx.drawImage(sp2, -sp2.width / 2, -sp2.height / 2);
         ctx.restore();
-        if (FG.rarityIdx[f.rarity] >= 2 && resT < 1.2) P.sparkleBurst(FG.W / 2, y + 62, FG.rarityColor(f.rarity));
+        if (FG.rarityIdx[f.rarity] >= 2 && resT < 1.2) P.sparkleBurst(FG.W / 2, y + 40, FG.rarityColor(f.rarity));
       }
-      F.draw(ctx, f.name, FG.W / 2, y + 98, "#e8f0f8", 2, { align: "center", shadow: true });
-      F.draw(ctx, FG.rarityName(f.rarity), FG.W / 2, y + 122, FG.rarityColor(f.rarity), 1, { align: "center" });
-      F.draw(ctx, KG(res.kg) + "   -   " + CM(res.cm), FG.W / 2 - 60, y + 138, "#c2ced9", 1, { align: "center" });
-      F.draw(ctx, res.quality.name + " QUALITY", FG.W / 2 + 80, y + 138, res.quality.color, 1, { align: "center" });
-      if (res.isBest) F.draw(ctx, "NEW PERSONAL BEST!", FG.W / 2, y + 149, "#ffd94a", 1, { align: "center" });
-      ctx.drawImage(FG.env.icon("coin"), x + 24, y + 132);
-      F.draw(ctx, "+" + FMT(res.coins), x + 22, y + 134, "#ffe48a", 1, { align: "right" });
-      F.draw(ctx, "+" + res.xp + " XP", x + w - 24, y + 134, "#c58ef8", 1, { align: "right" });
+      F.draw(ctx, f.name, FG.W / 2, y + 58, "#e8f0f8", 2, { align: "center", shadow: true });
+      F.draw(ctx, FG.rarityName(f.rarity), FG.W / 2, y + 76, FG.rarityColor(f.rarity), 1, { align: "center" });
+      // one consolidated stat line: weight/length left half, quality right half
+      var statL = KG(res.kg) + " - " + CM(res.cm);
+      var statR = res.quality.name + " QUALITY";
+      var cwid = 6; // glyph advance at scale 1
+      F.draw(ctx, statL, FG.W / 2 - (statL.length * cwid + 10) / 2, y + 90, "#c2ced9", 1, { align: "center" });
+      F.draw(ctx, statR, FG.W / 2 + (statR.length * cwid + 10) / 2, y + 90, res.quality.color, 1, { align: "center" });
+      if (res.isBest) F.draw(ctx, "NEW PERSONAL BEST!", FG.W / 2, y + 102, "#ffd94a", 1, { align: "center" });
+      ctx.drawImage(FG.env.icon("coin"), x + 26, y + 86);
+      F.draw(ctx, "+" + FMT(res.coins), x + 24, y + 88, "#ffe48a", 1, { align: "right" });
+      F.draw(ctx, "+" + res.xp + " XP", x + w - 24, y + 88, "#c58ef8", 1, { align: "right" });
     }
-    // buttons
+    // buttons: lost gets a single centered continue (nothing to mount/release)
     var mountable = !res.lost && (res.first || res.isBest) &&
       S.state.trophies.filter(function (t2) { return t2.id === f.id; }).length === 0 &&
       S.state.trophies.length < 18;
-    U.btn(ctx, x + 20, y + h - 30, 130, 22, "CONTINUE", { style: "green", cb: function () { G.toIdle(); } });
-    if (mountable) {
-      U.btn(ctx, x + w - 160, y + h - 30, 140, 22, "MOUNT IT", { style: "gold", cb: function () {
-        if (G.keepTrophy(res)) G.toIdle();
-      } });
+    if (res.lost) {
+      U.btn(ctx, FG.W / 2 - 70, y + h - 30, 140, 22, "CONTINUE", { style: "green", cb: function () { G.toIdle(); } });
     } else {
-      U.btn(ctx, x + w - 160, y + h - 30, 140, 22, "RELEASE", { cb: function () {
-        G.toIdle();
-        if (!res.lost) FG.ui.toast("THROWN BACK TO THE TIDE", "#4ec26b");
-      } });
+      U.btn(ctx, x + 20, y + h - 30, 130, 22, "CONTINUE", { style: "green", cb: function () { G.toIdle(); } });
+      if (mountable) {
+        U.btn(ctx, x + w - 160, y + h - 30, 140, 22, "MOUNT IT", { style: "gold", cb: function () {
+          if (G.keepTrophy(res)) G.toIdle();
+        } });
+      } else {
+        U.btn(ctx, x + w - 160, y + h - 30, 140, 22, "RELEASE", { cb: function () {
+          G.toIdle();
+          if (!res.lost) FG.ui.toast("THROWN BACK TO THE TIDE", "#4ec26b");
+        } });
+      }
     }
   }
 

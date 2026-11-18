@@ -20,6 +20,7 @@
     sfxGain = ctx.createGain(); sfxGain.gain.value = A2.sfx; sfxGain.connect(master);
   };
   A.resume = function () { if (ctx && ctx.state === "suspended") ctx.resume(); };
+  A.suspend = function () { if (ctx && ctx.state === "running") ctx.suspend(); };
 
   function now() { return ctx.currentTime; }
 
