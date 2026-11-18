@@ -219,53 +219,11 @@
   S.load();
   requestAnimationFrame(frame);
 
-  // ---------------- PWA: service worker + install prompt ----------------
+  // ---------------- PWA: service worker (install via the browser's own UI) ----------------
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
       navigator.serviceWorker.register("sw.js").catch(function () { /* offline is optional */ });
     });
-  }
-
-  var deferredBip = null;
-  var IS_IOS = /iPhone|iPad|iPod/.test(navigator.platform) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  var STANDALONE = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
-
-  var INST = FG.install = {
-    available: false,          // show the harbor install chip
-    isStandalone: STANDALONE,
-    deferred: null,
-    request: function () {
-      if (deferredBip) {
-        deferredBip.prompt();
-        return deferredBip.userChoice.then(function (choice) {
-          deferredBip = null;
-          INST.available = false;
-          if (choice.outcome === "accepted") U.toast("ISLAND ANGLER INSTALLED", "#4ec26b");
-        });
-      }
-      // iOS: no prompt API - tell the user the manual path
-      U.toast("TAP SHARE, THEN 'ADD TO HOME SCREEN'", "#ffd94a", 5);
-      return Promise.resolve();
-    }
-  };
-
-  window.addEventListener("beforeinstallprompt", function (e) {
-    e.preventDefault();
-    deferredBip = e;
-    INST.available = true;
-  });
-  window.addEventListener("appinstalled", function () {
-    INST.available = false;
-    deferredBip = null;
-  });
-  // iOS never fires beforeinstallprompt; offer the manual hint once on the harbor
-  if (IS_IOS && !STANDALONE) {
-    INST.available = true;
-    INST.request = function () {
-      U.toast("TAP SHARE, THEN 'ADD TO HOME SCREEN'", "#ffd94a", 5);
-      return Promise.resolve();
-    };
   }
 
   // test/debug seam: drive the game headlessly from the console

@@ -3,7 +3,7 @@
 // Cache-first for everything bundled; bump VERSION on release.
 // ============================================================
 
-var VERSION = "ia-v2";
+var VERSION = "ia-v3";
 var CORE = [
   "./",
   "index.html",
